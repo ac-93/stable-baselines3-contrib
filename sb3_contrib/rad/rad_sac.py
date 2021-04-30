@@ -136,6 +136,11 @@ class RAD_SAC(SAC):
 
         buffer_cls = AugmentedDictReplayBuffer if isinstance(self.observation_space, gym.spaces.Dict) else AugmentedReplayBuffer
 
+        try:
+            n_stack = self.env.n_stack
+        except:
+            n_stack = 1
+
         self.replay_buffer = buffer_cls(
             self.buffer_size,
             self.observation_space,
@@ -143,6 +148,7 @@ class RAD_SAC(SAC):
             self.device,
             augmentations=self.augmentations,
             visualise_aug=self.visualise_aug,
+            n_stack=n_stack,
             optimize_memory_usage=self.optimize_memory_usage,
         )
 
@@ -152,7 +158,7 @@ class RAD_SAC(SAC):
         exclude: Optional[Iterable[str]] = None,
         include: Optional[Iterable[str]] = None,
     ) -> None:
-        super(RAD_PPO, self).save(
+        super(RAD_SAC, self).save(
             path,
             exclude=['augmentations', 'visualise_aug']
         )

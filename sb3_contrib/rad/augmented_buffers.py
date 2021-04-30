@@ -17,27 +17,27 @@ from stable_baselines3.common.type_aliases import (
 from stable_baselines3.common.vec_env import VecNormalize
 from stable_baselines3.common.preprocessing import is_image_space
 
-def show_stacked_imgs(obs_stack, n_img_channel=1, max_display=16):
+def show_stacked_imgs(obs_stack, n_img_channels=3, max_display=16):
     from torchvision.utils import make_grid
     import matplotlib.pyplot as plt
 
     fig=plt.figure(figsize=(12, 12))
     n_batch = int(obs_stack.shape[0])
-    n_stack = int(obs_stack.shape[1] / n_img_channel)
+    n_stack = int(obs_stack.shape[1] / n_img_channels)
 
     for i in range(1, n_stack +1):
 
-        grid = make_grid(obs_stack[:max_display, (i-1)*n_img_channel:i*n_img_channel, ...], 4).permute(1,2,0).cpu().numpy()
+        grid = make_grid(obs_stack[:max_display, (i-1)*n_img_channels:i*n_img_channels, ...], 4).permute(1,2,0).cpu().numpy()
 
         fig.add_subplot(1, n_stack, i)
         plt.xticks([])
         plt.yticks([])
-        plt.title('channel ' + str(i))
+        plt.title('Frame: ' + str(i))
         plt.imshow(grid)
 
     plt.show(block=True)
 
-def apply_augmentations(obs, augmentations=None, visualise=False):
+def apply_image_augmentations(obs, augmentations=None, visualise=False, n_img_channels=1):
     """
     Apply augmentations to image observations using kornia.
     """
@@ -67,8 +67,7 @@ def apply_augmentations(obs, augmentations=None, visualise=False):
 
         # visualise augmentations at this point where range is [0,1]
         if visualise:
-            show_stacked_imgs(obs, n_img_channel=1)
-            # show_stacked_imgs(obs, n_img_channel=3)
+            show_stacked_imgs(obs, n_img_channels=n_img_channels)
 
         # un-normalize back to original input range
         obs = obs.view(obs.size(0), obs.size(1), -1)
@@ -107,6 +106,7 @@ class AugmentedReplayBuffer(ReplayBuffer):
         n_envs: int = 1,
         augmentations: th.nn.Sequential = None,
         visualise_aug: bool = False,
+        n_stack: int = 1,
         optimize_memory_usage: bool = False,
     ):
         super(AugmentedReplayBuffer, self).__init__(
@@ -121,6 +121,7 @@ class AugmentedReplayBuffer(ReplayBuffer):
 
         self.augmentations = augmentations
         self.visualise_aug = visualise_aug
+        self.n_img_channels = int(self.observation_space.shape[0] / n_stack)
 
     def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
 
@@ -132,8 +133,8 @@ class AugmentedReplayBuffer(ReplayBuffer):
             next_obs = self._normalize_obs(self.next_observations[batch_inds, 0, :], env)
 
         # apply augmentations
-        obs_aug = apply_augmentations(self.to_torch(obs), self.augmentations, self.visualise_aug)
-        next_obs_aug = apply_augmentations(self.to_torch(next_obs), self.augmentations, self.visualise_aug)
+        obs_aug = apply_image_augmentations(self.to_torch(obs), self.augmentations, self.visualise_aug, self.n_img_channels)
+        next_obs_aug = apply_image_augmentations(self.to_torch(next_obs), self.augmentations, self.visualise_aug, self.n_img_channels)
 
         data = tuple((
             obs_aug,
@@ -180,6 +181,7 @@ class AugmentedRolloutBuffer(RolloutBuffer):
         n_envs: int = 1,
         augmentations: th.nn.Sequential = None,
         visualise_aug: bool = False,
+        n_stack: int = 1,
     ):
         super(AugmentedRolloutBuffer, self).__init__(
             buffer_size,
@@ -195,11 +197,12 @@ class AugmentedRolloutBuffer(RolloutBuffer):
 
         self.augmentations = augmentations
         self.visualise_aug = visualise_aug
+        self.n_img_channels = int(self.observation_space.shape[0] / n_stack)
 
     def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
 
         obs = self.observations[batch_inds]
-        obs_aug = apply_augmentations(self.to_torch(obs), self.augmentations, self.visualise_aug)
+        obs_aug = apply_image_augmentations(self.to_torch(obs), self.augmentations, self.visualise_aug, self.n_img_channels)
 
         data = tuple((
             obs_aug,
@@ -235,11 +238,17 @@ class AugmentedDictReplayBuffer(DictReplayBuffer):
         optimize_memory_usage: bool = False,
         augmentations: th.nn.Sequential = None,
         visualise_aug: bool = False,
+        n_stack: int = 1,
     ):
         super(AugmentedDictReplayBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs, optimize_memory_usage)
 
         self.augmentations = augmentations
         self.visualise_aug = visualise_aug
+
+        self.n_img_channels = {}
+        for key, subspace in self.observation_space.spaces.items():
+            if is_image_space(subspace):
+                self.n_img_channels[key] = int(subspace.shape[0] / n_stack)
 
     def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> DictReplayBufferSamples:
 
@@ -254,8 +263,8 @@ class AugmentedDictReplayBuffer(DictReplayBuffer):
         # apply augmentations to images
         for key, subspace in self.observation_space.spaces.items():
             if is_image_space(subspace):
-                obs[key] = apply_augmentations(obs[key], self.augmentations, self.visualise_aug)
-                next_obs[key] = apply_augmentations(next_obs[key], self.augmentations, self.visualise_aug)
+                obs[key] = apply_image_augmentations(obs[key], self.augmentations, self.visualise_aug, self.n_img_channels[key])
+                next_obs[key] = apply_image_augmentations(next_obs[key], self.augmentations, self.visualise_aug, self.n_img_channels[key])
 
         return DictReplayBufferSamples(
             observations=obs,
@@ -303,6 +312,7 @@ class AugmentedDictRolloutBuffer(DictRolloutBuffer):
         n_envs: int = 1,
         augmentations: th.nn.Sequential = None,
         visualise_aug: bool = False,
+        n_stack: int = 1,
     ):
 
         super(AugmentedDictRolloutBuffer, self).__init__(
@@ -318,6 +328,10 @@ class AugmentedDictRolloutBuffer(DictRolloutBuffer):
         self.augmentations = augmentations
         self.visualise_aug = visualise_aug
 
+        self.n_img_channels = {}
+        for key, subspace in self.observation_space.spaces.items():
+            if is_image_space(subspace):
+                self.n_img_channels[key] = int(subspace.shape[0] / n_stack)
 
     def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> DictRolloutBufferSamples:
 
@@ -328,7 +342,7 @@ class AugmentedDictRolloutBuffer(DictRolloutBuffer):
         # apply augmentations to images
         for key, subspace in self.observation_space.spaces.items():
             if is_image_space(subspace):
-                obs[key] = apply_augmentations(obs[key], self.augmentations, self.visualise_aug)
+                obs[key] = apply_image_augmentations(obs[key], self.augmentations, self.visualise_aug, self.n_img_channels[key])
 
         return DictRolloutBufferSamples(
             observations=obs,

@@ -124,6 +124,11 @@ class RAD_PPO(PPO):
 
         buffer_cls = AugmentedDictRolloutBuffer if isinstance(self.observation_space, gym.spaces.Dict) else AugmentedRolloutBuffer
 
+        try:
+            n_stack = self.env.n_stack
+        except:
+            n_stack = 1
+
         self.rollout_buffer = buffer_cls(
             self.n_steps,
             self.observation_space,
@@ -134,7 +139,7 @@ class RAD_PPO(PPO):
             n_envs=self.n_envs,
             augmentations=self.augmentations,
             visualise_aug=self.visualise_aug,
-
+            n_stack=n_stack,
         )
 
     def save(
