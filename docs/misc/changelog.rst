@@ -3,6 +3,31 @@
 Changelog
 ==========
 
+Release 1.1.0a11 (WIP)
+-------------------------------
+
+Breaking Changes:
+^^^^^^^^^^^^^^^^^
+- Added support for Dictionary observation spaces (cf. SB3 doc)
+- Upgraded to Stable-Baselines3 >= 1.1.0
+- Added proper handling of timeouts for off-policy algorithms (cf. SB3 doc)
+- Updated usage of logger (cf. SB3 doc)
+
+Bug Fixes:
+^^^^^^^^^^
+- Removed unused code in ``TQC``
+
+Deprecations:
+^^^^^^^^^^^^^
+
+Others:
+^^^^^^^
+- SB3 docs and tests dependencies are no longer required for installing SB3 contrib
+
+Documentation:
+^^^^^^^^^^^^^^
+
+
 Release 1.0 (2021-03-17)
 -------------------------------
 
